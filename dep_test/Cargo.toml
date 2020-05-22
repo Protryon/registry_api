@@ -1,0 +1,10 @@
+[package]
+name = "dep_test"
+version = "0.1.0"
+authors = ["Protryon <max.bruce12@gmail.com>"]
+edition = "2018"
+publish = ["test"]
+description = "test"
+
+[dependencies]
+publish_test = { version = "0.1", registry = "test" }

@@ -1,0 +1,9 @@
+[package]
+name = "publish_test"
+version = "0.1.0"
+authors = ["Protryon <max.bruce12@gmail.com>"]
+edition = "2018"
+publish = ["test"]
+description = "test"
+
+[dependencies]
