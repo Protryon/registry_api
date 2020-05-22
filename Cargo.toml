@@ -2,7 +2,11 @@
 name = "registry_api"
 version = "0.1.0"
 authors = ["Protryon <max.bruce12@gmail.com>"]
+license = "MIT"
 edition = "2018"
+repository = "https://github.com/Protryon/registry_api"
+description = "Registry API implementation for crates.io"
+keywords = [ "crate", "crates", "cratesio", "registry", "api" ]
 
 [dependencies]
 actix-web = "2.0.0"
