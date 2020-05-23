@@ -1,4 +1,4 @@
-use actix_web::{ web::{self, Json}, error, Result, HttpRequest };
+use actix_web::{ web::{self, Json}, error, Result, HttpRequest, HttpResponse, http::{ StatusCode } };
 use futures::{StreamExt};
 use bytes::BytesMut;
 use crate::config;
@@ -7,7 +7,6 @@ use serde::{ Deserialize, Serialize };
 use sha2::Sha256;
 use sha2::Digest;
 use semver::Version;
-use bytes::Bytes;
 use crc::crc32;
 use regex::Regex;
 
@@ -18,6 +17,7 @@ lazy_static! {
 fn ascii_check(s: &str) -> bool {
     !s.as_bytes().iter().any(|x| *x == 0 || *x >= 127)
 }
+
 
 #[derive(Serialize, Deserialize)]
 pub(super) struct RegistryError {
@@ -131,13 +131,109 @@ pub(super) async fn new(req: HttpRequest, auth: CargoAuth, mut body: web::Payloa
     if metadata.description.is_none() || metadata.description.as_ref().unwrap().trim() == "" {
         return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "you must specify a description in your Cargo.toml".to_string() }])));
     }
+    for (feature_name, features) in metadata.features.iter() {
+        if !CRATE_NAME_REGEX.is_match(feature_name) || features.iter().any(|x| !CRATE_NAME_REGEX.is_match(x)) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in features".to_string() }])));
+        }
+    }
+    for author in metadata.authors.iter() {
+        if !ascii_check(author) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in authors".to_string() }])));
+        }
+    }
+    if let Some(description) = &metadata.description {
+        if !ascii_check(description) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in description".to_string() }])));
+        }
+    }
+    if let Some(documentation) = &metadata.documentation {
+        if !ascii_check(documentation) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in documentation".to_string() }])));
+        }
+    }
+    if let Some(homepage) = &metadata.homepage {
+        if !ascii_check(homepage) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in homepage".to_string() }])));
+        }
+    }
+    if let Some(readme) = &metadata.readme {
+        if !ascii_check(readme) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in readme".to_string() }])));
+        }
+    }
+    if let Some(readme_file) = &metadata.readme_file {
+        if !ascii_check(readme_file) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in readme_file".to_string() }])));
+        }
+    }
+    for keyword in metadata.keywords.iter() {
+        if !CRATE_NAME_REGEX.is_match(keyword) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in keywords".to_string() }])));
+        }
+    }
+    for keyword in metadata.categories.iter() {
+        if !CRATE_NAME_REGEX.is_match(keyword) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected categories in categories".to_string() }])));
+        }
+    }
+    if let Some(license) = &metadata.license {
+        if !ascii_check(license) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in license".to_string() }])));
+        }
+    }
+    if let Some(license_file) = &metadata.license_file {
+        if !ascii_check(license_file) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in license_file".to_string() }])));
+        }
+    }
+    if let Some(repository) = &metadata.repository {
+        if !ascii_check(repository) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in repository".to_string() }])));
+        }
+    }
+    for (name, data) in metadata.badges.iter() {
+        if !CRATE_NAME_REGEX.is_match(name) || data.iter().any(|(name, value)| !CRATE_NAME_REGEX.is_match(name) || !ascii_check(value)) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in badges".to_string() }])));
+        }
+    }
+    if let Some(links) = &metadata.links {
+        if !ascii_check(links) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in links".to_string() }])));
+        }
+    }
+    for dependency in metadata.deps.iter() {
+        if !CRATE_NAME_REGEX.is_match(&dependency.name) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in dependency name".to_string() }])));
+        }
+        if dependency.features.iter().any(|x| !CRATE_NAME_REGEX.is_match(x)) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in dependency features".to_string() }])));
+        }
+        if let Some(target) = &dependency.target {
+            if !ascii_check(target) {
+                return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in dependency target".to_string() }])));
+            }
+        }
+        if !ascii_check(&dependency.kind) {
+            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in dependency kind".to_string() }])));
+        }
+        if let Some(registry) = &dependency.registry {
+            if !ascii_check(registry) {
+                return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in dependency registry".to_string() }])));
+            }
+        }
+        if let Some(explicit_name_in_toml) = &dependency.explicit_name_in_toml {
+            if !ascii_check(explicit_name_in_toml) {
+                return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in dependency explicit_name_in_toml".to_string() }])));
+            }
+        }
+    }
     if !config.crate_provider.check_name_availability(&metadata.name).await
         .map_err(|e| {
             config.log_ingestor.error(format!("error checking name availability for crate crate: {:?}", e));
             error::ErrorServiceUnavailable("service unavailable")
         })? {
-            return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "crate name was taken by a similar crate".to_string() }])));
-        }
+        return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "crate name was taken by a similar crate".to_string() }])));
+    }
 
     let bytes = &bytes[4 + metadata_len..];
     if bytes.len() < 4 {
@@ -159,7 +255,7 @@ pub(super) async fn new(req: HttpRequest, auth: CargoAuth, mut body: web::Payloa
         yanked: false,
         cksum: hex::encode(result),
         owners: vec![username.to_string()],
-        fetcher: Arc::new(crate_file.to_owned()),
+        fetcher: config::CrateFetch::DirectFetch(Arc::new(crate_file.to_owned())),
     }).await.map_err(|e| {
         config.log_ingestor.error(format!("error publishing crate: {:?}", e));
         error::ErrorServiceUnavailable("service unavailable")
@@ -235,16 +331,26 @@ pub(super) async fn unyank(req: HttpRequest, auth: CargoAuth, info: web::Path<Cr
     Ok(Json(RegistryResponse::Ok(true)))
 }
 
-pub(super) async fn download(req: HttpRequest, info: web::Path<CrateInfo>) -> Result<Bytes> {
+pub(super) async fn download(req: HttpRequest, info: web::Path<CrateInfo>) -> Result<HttpResponse> {
     let config: &Arc<config::Config> = req.app_data().unwrap();
 
     let ccrate = get_crate(config, &info.crate_name, Some(&info.version)).await?;
-    Ok(ccrate.fetcher.fetch(&ccrate).await
-        .map_err(|e| {
-            config.log_ingestor.error(format!("error pulling crate: {:?}", e));
-            error::ErrorServiceUnavailable("service unavailable")
-        })?
-    )
+    match &ccrate.fetcher {
+        config::CrateFetch::DirectFetch(fetcher) => {
+            let body = fetcher.fetch(&ccrate)
+                .await
+                .map_err(|e| {
+                    config.log_ingestor.error(format!("error pulling crate: {:?}", e));
+                    error::ErrorServiceUnavailable("service unavailable")
+                })?;
+            Ok(HttpResponse::from(body))
+        },
+        config::CrateFetch::Redirect(url) => {
+            let mut builder = HttpResponse::build(StatusCode::FOUND);
+            builder.set_header("Location", url.to_string());
+            Ok(builder.finish())
+        },
+    }
 }
 
 #[derive(Serialize)]

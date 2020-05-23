@@ -11,4 +11,4 @@ dependencies = [
 name = "publish_test"
 version = "0.1.0"
 source = "registry+http://localhost:8080/registry/index.git"
-checksum = "3403f24a2649defc59bdf8129bb7b133de6ce8c9c0a0c579ff0658434b99e4a4"
+checksum = "1158e54e803e13ad30e01b8fdeba901d8f8074c6dfcc795b8a63101868e433f2"

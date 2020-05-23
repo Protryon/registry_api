@@ -197,7 +197,7 @@ impl Git {
                 },
                 None => {
                     mutated = true;
-                    self.write_crate(&ccrate).await?;    
+                    self.write_crate(&ccrate).await?;
                 },
                 _ => (),
             }

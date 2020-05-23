@@ -175,7 +175,7 @@ pub struct ApiCrate {
     pub keywords: Vec<String>,
     /// Array of strings of categories for the package.
     #[serde(default)]
-    pub categorires: Vec<String>,
+    pub categories: Vec<String>,
     /// String of the license for the package.
     /// May be null. crates.io requires either `license` or `license_file` to be set.
     pub license: Option<String>,
@@ -231,6 +231,12 @@ pub struct Warnings {
     pub other: Vec<String>,
 }
 
+#[derive(Clone)]
+pub enum CrateFetch {
+    DirectFetch(Arc<dyn CrateFetcher>),
+    Redirect(Url),
+}
+
 #[async_trait]
 pub trait CrateFetcher: Send + Sync {
     async fn fetch(&self, registry_crate: &RegistryCrate) -> Result<Bytes>;
@@ -251,7 +257,7 @@ pub struct RegistryCrate {
     pub yanked: bool,
     pub cksum: String,
     pub owners: Vec<String>,
-    pub fetcher: Arc<dyn CrateFetcher>,
+    pub fetcher: CrateFetch,
 }
 
 impl RegistryCrate {
