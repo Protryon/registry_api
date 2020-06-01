@@ -132,7 +132,7 @@ pub(super) async fn new(req: HttpRequest, auth: CargoAuth, mut body: web::Payloa
         return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "you must specify a description in your Cargo.toml".to_string() }])));
     }
     for (feature_name, features) in metadata.features.iter() {
-        if !CRATE_NAME_REGEX.is_match(feature_name) || features.iter().any(|x| !CRATE_NAME_REGEX.is_match(x)) {
+        if !ascii_check(feature_name) || features.iter().any(|x| !ascii_check(x)) {
             return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in features".to_string() }])));
         }
     }
@@ -192,7 +192,7 @@ pub(super) async fn new(req: HttpRequest, auth: CargoAuth, mut body: web::Payloa
         }
     }
     for (name, data) in metadata.badges.iter() {
-        if !CRATE_NAME_REGEX.is_match(name) || data.iter().any(|(name, value)| !CRATE_NAME_REGEX.is_match(name) || !ascii_check(value)) {
+        if !CRATE_NAME_REGEX.is_match(name) || data.iter().any(|(name, value)| !ascii_check(name) || !ascii_check(value)) {
             return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in badges".to_string() }])));
         }
     }
@@ -205,7 +205,7 @@ pub(super) async fn new(req: HttpRequest, auth: CargoAuth, mut body: web::Payloa
         if !CRATE_NAME_REGEX.is_match(&dependency.name) {
             return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in dependency name".to_string() }])));
         }
-        if dependency.features.iter().any(|x| !CRATE_NAME_REGEX.is_match(x)) {
+        if dependency.features.iter().any(|x| !ascii_check(x)) {
             return Ok(Json(RegistryResponse::Errors(vec![RegistryError { detail: "unexpected tokens in dependency features".to_string() }])));
         }
         if let Some(target) = &dependency.target {
