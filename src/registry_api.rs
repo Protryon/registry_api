@@ -227,7 +227,7 @@ pub(super) async fn new(req: HttpRequest, auth: CargoAuth, mut body: web::Payloa
             }
         }
     }
-    if !config.crate_provider.check_name_availability(&metadata.name).await
+    if existing_crate.is_none() && !config.crate_provider.check_name_availability(&metadata.name).await
         .map_err(|e| {
             config.log_ingestor.error(format!("error checking name availability for crate crate: {:?}", e));
             error::ErrorServiceUnavailable("service unavailable")
