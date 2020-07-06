@@ -125,7 +125,7 @@ pub(super) async fn new(
 
     let existing_crate = config
         .crate_provider
-        .get(&metadata.name, Some(&metadata.vers))
+        .get(&metadata.name, None)
         .await
         .map_err(|e| {
             config
@@ -134,15 +134,25 @@ pub(super) async fn new(
             error::ErrorServiceUnavailable("service unavailable")
         })?;
 
+    let existing_exact_crate = config
+        .crate_provider
+        .get(&metadata.name, Some(&metadata.vers))
+        .await
+        .map_err(|e| {
+            config
+                .log_ingestor
+                .error(format!("error fetching crate: {:?}", e));
+            error::ErrorServiceUnavailable("service unavailable")
+        })?;
+    if let Some(_) = existing_exact_crate {
+        return Ok(Json(RegistryResponse::Errors(vec![RegistryError {
+            detail: "this version has already published".to_string(),
+        }])));
+    }
+
     if let Some(existing_crate) = &existing_crate {
         if !existing_crate.owners.iter().any(|x| x == username) {
-            return Err(error::ErrorUnauthorized(""));
-        }
-
-        if existing_crate.api_crate.vers >= metadata.vers {
-            return Ok(Json(RegistryResponse::Errors(vec![RegistryError {
-                detail: "this version has already published".to_string(),
-            }])));
+            return Err(error::ErrorUnauthorized("no permission to publish crate"));
         }
     }
 
