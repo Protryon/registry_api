@@ -1,16 +1,16 @@
-use actix_web::{ web, error, Result, HttpResponse, HttpRequest, http::{ StatusCode }, HttpMessage };
 use crate::config;
-use std::sync::Arc;
-use tokio::process::Command;
-use std::process::Stdio;
-use tokio::io::BufReader;
-use tokio::prelude::*;
-use bytes::{ Bytes, BytesMut };
-use std::task::{ Poll, Context };
-use std::pin::Pin;
-use std::io::Result as IoResult;
+use actix_web::{error, http::StatusCode, web, HttpMessage, HttpRequest, HttpResponse, Result};
+use bytes::{Bytes, BytesMut};
 use futures::StreamExt;
 use std::collections::BTreeMap;
+use std::io::Result as IoResult;
+use std::pin::Pin;
+use std::process::Stdio;
+use std::sync::Arc;
+use std::task::{Context, Poll};
+use tokio::io::BufReader;
+use tokio::prelude::*;
+use tokio::process::Command;
 
 pub(super) async fn info() -> String {
     // todo: more human info here
@@ -35,16 +35,19 @@ impl<T: AsyncRead + Unpin> tokio::stream::Stream for BytesStream<T> {
                     let bytes = Bytes::copy_from_slice(&mself.buf[0..count]);
                     Poll::Ready(Some(Ok(bytes)))
                 }
-            },
-            Poll::Ready(Err(e)) => {
-                Poll::Ready(Some(Err(e)))
-            },
+            }
+            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
             Poll::Pending => Poll::Pending,
         }
     }
 }
 
-async fn serve_cgi(config: &Arc<config::Config>, req: &HttpRequest, path: &str, body: Option<&[u8]>) -> Result<HttpResponse> {
+async fn serve_cgi(
+    config: &Arc<config::Config>,
+    req: &HttpRequest,
+    path: &str,
+    body: Option<&[u8]>,
+) -> Result<HttpResponse> {
     // let path = req.path();
     // let git_index = path.find(".git/").unwrap();
     // let path = &path[git_index + 4..];
@@ -59,13 +62,15 @@ async fn serve_cgi(config: &Arc<config::Config>, req: &HttpRequest, path: &str, 
     let addr = t.remote().unwrap_or(":").split(':').next().unwrap_or("");
     cgi_params.insert("REMOTE_ADDR", addr);
     cgi_params.insert("REMOTE_HOST", addr);
-    cgi_params.insert("REMOTE_PORT", t.remote().unwrap_or(":").split(':').last().unwrap_or(""));
+    cgi_params.insert(
+        "REMOTE_PORT",
+        t.remote().unwrap_or(":").split(':').last().unwrap_or(""),
+    );
     cgi_params.insert("CONTENT_TYPE", req.content_type());
     cgi_params.insert("QUERY_STRING", req.query_string());
     let t = req.method().to_string();
     cgi_params.insert("REQUEST_METHOD", &t);
     cgi_params.insert("GIT_HTTP_EXPORT_ALL", "true");
-    
 
     cgi_params.insert("REQUEST_URI", path);
     let t = format!("{}", body.as_ref().map(|x| x.len()).unwrap_or(0));
@@ -85,15 +90,19 @@ async fn serve_cgi(config: &Arc<config::Config>, req: &HttpRequest, path: &str, 
         .stdin(Stdio::piped())
         .spawn()
         .map_err(|e| {
-            config.log_ingestor.error(format!("failed to spawn git http-backend: {:?}", e));
+            config
+                .log_ingestor
+                .error(format!("failed to spawn git http-backend: {:?}", e));
             error::ErrorServiceUnavailable("")
         })?;
     if let Some(body) = body {
-        output.stdin.unwrap().write_all(body).await
-            .map_err(|e| {
-                config.log_ingestor.error(format!("failed to write stdin to git http-backend: {:?}", e));
-                error::ErrorServiceUnavailable("")
-            })?;
+        output.stdin.unwrap().write_all(body).await.map_err(|e| {
+            config.log_ingestor.error(format!(
+                "failed to write stdin to git http-backend: {:?}",
+                e
+            ));
+            error::ErrorServiceUnavailable("")
+        })?;
     } else {
         output.stdin.unwrap(); // drops
     }
@@ -103,7 +112,10 @@ async fn serve_cgi(config: &Arc<config::Config>, req: &HttpRequest, path: &str, 
     let mut line = String::new();
     'outer: loop {
         stdout.read_line(&mut line).await.map_err(|e| {
-            config.log_ingestor.error(format!("failed to read stdout header from git http-backend: {:?}", e));
+            config.log_ingestor.error(format!(
+                "failed to read stdout header from git http-backend: {:?}",
+                e
+            ));
             error::ErrorServiceUnavailable("")
         })?;
         if line.trim() == "" {
@@ -111,9 +123,12 @@ async fn serve_cgi(config: &Arc<config::Config>, req: &HttpRequest, path: &str, 
         }
         let (name, value) = match line.find(':') {
             None => {
-                config.log_ingestor.error(format!("corrupt http header from git http-backend: {}", line));
+                config.log_ingestor.error(format!(
+                    "corrupt http header from git http-backend: {}",
+                    line
+                ));
                 return Err(error::ErrorServiceUnavailable(""));
-            },
+            }
             Some(i) => line.split_at(i),
         };
         let name = name.trim();
@@ -125,17 +140,20 @@ async fn serve_cgi(config: &Arc<config::Config>, req: &HttpRequest, path: &str, 
             };
 
             builder.status(
-                StatusCode::from_u16(
-                    value.parse()
-                        .map_err(|e| {
-                            config.log_ingestor.error(format!("invalid status number from git http-backend: {:?}", e));
-                            error::ErrorServiceUnavailable("")
-                        })?
-                )
-                .map_err(|e| {
-                    config.log_ingestor.error(format!("invalid status number from git http-backend: {:?}", e));
+                StatusCode::from_u16(value.parse().map_err(|e| {
+                    config.log_ingestor.error(format!(
+                        "invalid status number from git http-backend: {:?}",
+                        e
+                    ));
                     error::ErrorServiceUnavailable("")
-                })?
+                })?)
+                .map_err(|e| {
+                    config.log_ingestor.error(format!(
+                        "invalid status number from git http-backend: {:?}",
+                        e
+                    ));
+                    error::ErrorServiceUnavailable("")
+                })?,
             );
         } else {
             builder.header(name, value);
@@ -143,9 +161,10 @@ async fn serve_cgi(config: &Arc<config::Config>, req: &HttpRequest, path: &str, 
         line.clear();
     }
 
-    Ok(builder.streaming(
-        BytesStream { inner: stdout, buf: vec![0; 1024] }
-    ))
+    Ok(builder.streaming(BytesStream {
+        inner: stdout,
+        buf: vec![0; 1024],
+    }))
 }
 
 pub(super) async fn refs(req: HttpRequest) -> Result<HttpResponse> {
@@ -165,5 +184,7 @@ pub(super) async fn upload_pack(req: HttpRequest, mut body: web::Payload) -> Res
 }
 
 pub(super) async fn receive_pack() -> Result<String> {
-    Err(error::ErrorForbidden("use cargo publish to update this index"))
+    Err(error::ErrorForbidden(
+        "use cargo publish to update this index",
+    ))
 }

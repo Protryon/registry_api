@@ -1,16 +1,16 @@
-use tokio::sync::RwLock;
-use std::path::PathBuf;
-use tokio::fs;
-use crate::result::*;
-use tokio::process::Command;
-use serde::{Deserialize, Serialize};
 use crate::config::*;
-use std::collections::{ HashMap, HashSet };
+use crate::result::*;
 use semver::Version;
-use tokio::prelude::*;
-use url::Url;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::time::{ delay_for, Duration };
+use tokio::fs;
+use tokio::prelude::*;
+use tokio::process::Command;
+use tokio::sync::RwLock;
+use tokio::time::{delay_for, Duration};
+use url::Url;
 
 pub struct Git {
     directory: PathBuf,
@@ -24,27 +24,27 @@ pub struct ConfigFile {
     pub api: String,
 }
 
-
 impl Git {
-
     pub async fn reset_git_worker(self: Arc<Self>, config: Arc<Config>) {
         loop {
-             match config.crate_provider.index().await {
-                Ok(crates) => {
-                    match self.reset_git(crates).await {
-                        Ok(()) => (),
-                        Err(e) => {
-                            config.log_ingestor.error(format!("failed to update index crates: {:?}", e));
-                        }
+            match config.crate_provider.index().await {
+                Ok(crates) => match self.reset_git(crates).await {
+                    Ok(()) => (),
+                    Err(e) => {
+                        config
+                            .log_ingestor
+                            .error(format!("failed to update index crates: {:?}", e));
                     }
                 },
                 Err(e) => {
-                    config.log_ingestor.error(format!("failed to fetch index crates: {:?}", e));
+                    config
+                        .log_ingestor
+                        .error(format!("failed to fetch index crates: {:?}", e));
                 }
             }
             delay_for(Duration::from_secs(60)).await;
         }
-    }    
+    }
 
     pub fn new(index_dir: PathBuf, mut exposed_url: Url) -> Result<Git> {
         let path = exposed_url.path().to_string();
@@ -65,7 +65,7 @@ impl Git {
                     let path = new_url.path().to_string();
                     new_url.set_path(&*format!("{}{}", path, "/api/v1/crates"));
                     new_url.to_string()
-                }
+                },
             },
             update_lock: tokio::sync::RwLock::new(()),
         })
@@ -73,7 +73,14 @@ impl Git {
 
     async fn init_git(&self) -> Result<()> {
         fs::create_dir_all(&self.directory).await?;
-        if Command::new("git").arg("init").current_dir(&self.directory).status().await?.code() != Some(0) {
+        if Command::new("git")
+            .arg("init")
+            .current_dir(&self.directory)
+            .status()
+            .await?
+            .code()
+            != Some(0)
+        {
             return Err(registry_err!("failed to run git init"));
         }
         self.write_config().await?;
@@ -88,7 +95,10 @@ impl Git {
     }
 
     #[async_recursion::async_recursion]
-    async fn recur_crates(path: &PathBuf, results: &mut HashMap<(String, Version), IndexCrate>) -> Result<()> {
+    async fn recur_crates(
+        path: &PathBuf,
+        results: &mut HashMap<(String, Version), IndexCrate>,
+    ) -> Result<()> {
         let mut dir = fs::read_dir(path).await?;
         while let Some(entry) = dir.next_entry().await? {
             let name = entry.file_name();
@@ -98,7 +108,7 @@ impl Git {
             match entry.file_type().await? {
                 x if x.is_dir() => {
                     Git::recur_crates(&entry.path(), results).await?;
-                },
+                }
                 x if x.is_file() => {
                     let crates = String::from_utf8_lossy(&fs::read(&entry.path()).await?[..])
                         .split('\n')
@@ -108,7 +118,7 @@ impl Git {
                     for ccrate in crates.into_iter() {
                         results.insert((ccrate.name.clone(), ccrate.vers.clone()), ccrate);
                     }
-                },
+                }
                 _ => (),
             }
         }
@@ -142,8 +152,13 @@ impl Git {
     async fn write_crate(&self, ccrate: &IndexCrate) -> Result<()> {
         let crate_path = self.crate_path(&ccrate.name)?;
         fs::create_dir_all(crate_path.parent().unwrap()).await?;
-        let mut f = fs::OpenOptions::new().append(true).create(true).open(&crate_path).await?;
-        f.write_all(format!("{}\n", serde_json::to_string(&ccrate)?).as_bytes()).await?;
+        let mut f = fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&crate_path)
+            .await?;
+        f.write_all(format!("{}\n", serde_json::to_string(&ccrate)?).as_bytes())
+            .await?;
         f.flush().await?;
         Ok(())
     }
@@ -159,17 +174,35 @@ impl Git {
             .filter(|x| &x.vers != version)
             .map(|x| serde_json::to_string(&x).map_err(|x| x.into()))
             .collect::<Result<Vec<String>>>()?
-            .join("\n") + "\n";
+            .join("\n")
+            + "\n";
 
         fs::write(&crate_path, crates.as_bytes()).await?;
         Ok(())
     }
 
     async fn commit(&self, message: &str) -> Result<()> {
-        if Command::new("git").arg("add").arg("-A").current_dir(&self.directory).status().await?.code() != Some(0) {
+        if Command::new("git")
+            .arg("add")
+            .arg("-A")
+            .current_dir(&self.directory)
+            .status()
+            .await?
+            .code()
+            != Some(0)
+        {
             return Err(registry_err!("failed to run git add"));
         }
-        if Command::new("git").arg("commit").arg("-am").arg(message).current_dir(&self.directory).status().await?.code() != Some(0) {
+        if Command::new("git")
+            .arg("commit")
+            .arg("-am")
+            .arg(message)
+            .current_dir(&self.directory)
+            .status()
+            .await?
+            .code()
+            != Some(0)
+        {
             return Err(registry_err!("failed to run git commit"));
         }
         Ok(())
@@ -192,13 +225,14 @@ impl Git {
             match existing_crate {
                 Some(existing_crate) if existing_crate != ccrate => {
                     mutated = true;
-                    self.delete_crate(&existing_crate.name, &existing_crate.vers).await?;
+                    self.delete_crate(&existing_crate.name, &existing_crate.vers)
+                        .await?;
                     self.write_crate(&ccrate).await?;
-                },
+                }
                 None => {
                     mutated = true;
                     self.write_crate(&ccrate).await?;
-                },
+                }
                 _ => (),
             }
         }
@@ -210,7 +244,13 @@ impl Git {
             }
         }
         if mutated {
-            self.commit(&*format!("automatic update {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis())).await?;
+            self.commit(&*format!(
+                "automatic update {}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_millis()
+            ))
+            .await?;
         }
         Ok(())
     }

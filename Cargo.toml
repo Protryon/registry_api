@@ -1,6 +1,6 @@
 [package]
 name = "registry_api"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Protryon <max.bruce12@gmail.com>"]
 license = "MIT"
 edition = "2018"

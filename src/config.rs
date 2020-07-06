@@ -1,15 +1,14 @@
-
+use crate::git_manager::*;
 use crate::result::*;
-use serde::{ Deserialize, Serialize };
-use std::collections::BTreeMap;
-use semver::{ Version, VersionReq };
 use async_trait::async_trait;
 use bytes::Bytes;
-use std::sync::Arc;
 use log::*;
-use crate::git_manager::*;
-use url::Url;
+use semver::{Version, VersionReq};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
+use url::Url;
 
 #[derive(Clone)]
 pub struct Config {
@@ -23,7 +22,14 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(bind_addr: &str, index_dir: &str, exposed_url: Url, crate_provider: Arc<dyn CrateProvider>, user_provider: Arc<dyn UserProvider>, log_ingestor: Option<Arc<dyn LogIngestor>>) -> Result<Config> {
+    pub fn new(
+        bind_addr: &str,
+        index_dir: &str,
+        exposed_url: Url,
+        crate_provider: Arc<dyn CrateProvider>,
+        user_provider: Arc<dyn UserProvider>,
+        log_ingestor: Option<Arc<dyn LogIngestor>>,
+    ) -> Result<Config> {
         let index_dir = index_dir.parse::<PathBuf>()?;
         std::fs::create_dir_all(index_dir.parent().unwrap())?;
         let mut index_dir_parent = index_dir.parent().unwrap().canonicalize()?;
@@ -33,7 +39,7 @@ impl Config {
             bind_addr: bind_addr.to_string(),
             index_dir: index_dir_parent.clone(),
             crate_provider,
-            user_provider, 
+            user_provider,
             log_ingestor: log_ingestor.unwrap_or_else(|| Arc::new(())),
             git_manager: Arc::new(Git::new(index_dir_parent, exposed_url)?),
         })
@@ -244,7 +250,6 @@ pub trait CrateFetcher: Send + Sync {
 
 #[async_trait]
 impl<T: Into<Bytes> + Clone + Send + Sync> CrateFetcher for T {
-
     async fn fetch(&self, _registry_crate: &RegistryCrate) -> Result<Bytes> {
         Ok(self.clone().into())
     }
@@ -265,7 +270,13 @@ impl RegistryCrate {
         IndexCrate {
             name: self.api_crate.name.clone(),
             vers: self.api_crate.vers.clone(),
-            deps: self.api_crate.deps.clone().into_iter().map(|x| x.into()).collect::<Vec<IndexDependency>>(),
+            deps: self
+                .api_crate
+                .deps
+                .clone()
+                .into_iter()
+                .map(|x| x.into())
+                .collect::<Vec<IndexDependency>>(),
             cksum: self.cksum.clone(),
             features: self.api_crate.features.clone(),
             yanked: self.yanked,
@@ -283,7 +294,6 @@ pub trait UserProvider: Send + Sync + 'static {
 
 #[async_trait]
 pub trait CrateProvider: Send + Sync + 'static {
-
     /// used to serve git endpoint for crate index, internal caller or unauthenticated
     async fn index(&self) -> Result<Vec<IndexCrate>>;
 
@@ -303,7 +313,8 @@ pub trait CrateProvider: Send + Sync + 'static {
     async fn unyank(&self, name: &str, version: &Version) -> Result<()>;
 
     /// update owners on a crate, authorized
-    async fn update_owners(&self, name: &str, version: &Version, owners: Vec<String>) -> Result<()>;
+    async fn update_owners(&self, name: &str, version: &Version, owners: Vec<String>)
+        -> Result<()>;
 
     /// search for crates, unauthenticated
     async fn search(&self, query: &str, count: u32) -> Result<Vec<SearchResult>>;

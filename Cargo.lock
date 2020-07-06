@@ -1291,7 +1291,7 @@ checksum = "7fe5bd57d1d7414c6b5ed48563a2c855d995ff777729dcd91c369ec7fea395ae"
 
 [[package]]
 name = "registry_api"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "actix-rt",
  "actix-web",
